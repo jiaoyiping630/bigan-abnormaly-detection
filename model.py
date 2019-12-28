@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+'''
+    Generator是 隐码 -> 图像 的模块
+    从输出偏置可以推测输出尺寸为32x32
+    似乎把Encoder的模型逆过来就行了……
+'''
 class Generator(nn.Module):
 
     def __init__(self, latent_size):
@@ -10,6 +15,7 @@ class Generator(nn.Module):
         self.latent_size = latent_size
 
         self.output_bias = nn.Parameter(torch.zeros(3, 32, 32), requires_grad=True)
+
         self.main = nn.Sequential(
             nn.ConvTranspose2d(self.latent_size, 256, 4, stride=1, bias=False),
             nn.BatchNorm2d(256),
@@ -43,7 +49,7 @@ class Generator(nn.Module):
         output = F.sigmoid(output + self.output_bias)
         return output
 
-
+'''Encoder是 图像 -> 隐码 的模块'''
 class Encoder(nn.Module):
 
     def __init__(self, latent_size, noise=False):
@@ -52,6 +58,11 @@ class Encoder(nn.Module):
 
         if noise:
             self.latent_size *= 2
+
+        '''
+            这一部分包含4个卷积层，下采样率为4，通道数为256
+            注意，由于这里的conv都是valid型的，因此图像仍然在不断缩小
+        '''
         self.main1 = nn.Sequential(
             nn.Conv2d(3, 32, 5, stride=1, bias=False),
             nn.BatchNorm2d(32),
@@ -70,22 +81,26 @@ class Encoder(nn.Module):
             nn.LeakyReLU(inplace=True)
         )
 
+        '''通道数变为512'''
         self.main2 = nn.Sequential(
             nn.Conv2d(256, 512, 4, stride=1, bias=False),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(inplace=True)
         )
 
+        '''相当于全连接层，输出通道依然是512'''
         self.main3 = nn.Sequential(
             nn.Conv2d(512, 512, 1, stride=1, bias=False),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(inplace=True)
         )
 
+        '''可能…这里最后变成了256x1x1吧…'''
         self.main4 = nn.Sequential(
             nn.Conv2d(512, self.latent_size, 1, stride=1, bias=True)
         )
 
+    '''很奇怪，为什么这里要把中间的模块都要输出出来呢？'''
     def forward(self, input):
         batch_size = input.size()[0]
         x1 = self.main1(input)
